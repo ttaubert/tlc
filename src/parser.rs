@@ -6,7 +6,13 @@ use std::str::from_utf8;
 
 use nom::{digit, eol, multispace, non_empty, not_line_ending, space};
 
-use types::{AST, Oper};
+use types::AST;
+
+// Connectives.
+pub enum Oper {
+    And,
+    Or,
+}
 
 // "\*" to comment out the rest of the line.
 named!(
@@ -35,37 +41,43 @@ named!(
     ))
 );
 
-named!(number<AST>,
-complete!(
-  map!(map_res!(map_res!(digit, from_utf8), |x: &str| {
-    u64::from_str_radix(x, 10)
-  }), |n| AST::Number(n))
-)
+named!(
+    number<AST>,
+    complete!(map!(
+        map_res!(map_res!(digit, from_utf8), |x: &str| {
+            u64::from_str_radix(x, 10)
+        }),
+        |n| AST::Number(n)
+    ))
 );
 
-named!(identifier<AST>,
-  map!(map_res!(recognize!(
-      terminated!(
-          many1!(one_of!("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890_")),
-          opt!(complete!(tag!("'")))
-      )
-  ), |id: &[u8]| {
-    String::from_utf8(id.to_vec())
-  }), |id: String| {
-    AST::Identifier(id)
-  })
+named!(
+    identifier<AST>,
+    map!(
+        map_res!(
+            recognize!(terminated!(
+                many1!(one_of!(
+                    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890_"
+                )),
+                opt!(complete!(tag!("'")))
+            )),
+            |id: &[u8]| { String::from_utf8(id.to_vec()) }
+        ),
+        |id: String| { AST::Identifier(id) }
+    )
 );
 
-named!(identifier_list<Vec<AST>>,
-  separated_nonempty_list!(
-    complete!(
-      delimited!(opt!(blanks), tag!(","), opt!(blanks))
-    ), identifier)
+named!(
+    identifier_list<Vec<AST>>,
+    separated_nonempty_list!(
+        complete!(delimited!(opt!(blanks), tag!(","), opt!(blanks))),
+        identifier
+    )
 );
 
-named!(set<AST>,
-complete!(
-  do_parse!(
+named!(
+    set<AST>,
+    complete!(do_parse!(
     tag!("{") >>
     opt!(blanks) >>
     list: separated_list!(
@@ -75,13 +87,12 @@ complete!(
     opt!(blanks) >>
     tag!("}") >>
     (AST::Set(list))
-  )
-)
+  ))
 );
 
-named!(tuple<AST>,
-complete!(
-  do_parse!(
+named!(
+    tuple<AST>,
+    complete!(do_parse!(
     tag!("<<") >>
     opt!(blanks) >>
     list: separated_list!(
@@ -91,37 +102,28 @@ complete!(
     opt!(blanks) >>
     tag!(">>") >>
     (AST::Tuple(list))
-  )
-)
+  ))
 );
 
-named!(variables<AST>,
-complete!(
-  do_parse!(
-    tag!("VARIABLE") >>
-    opt!(tag!("S")) >>
-    blanks >>
-    ids: identifier_list >>
-    (AST::Variables(ids))
-  )
-)
+named!(
+    variables<AST>,
+    complete!(do_parse!(
+        tag!("VARIABLE") >> opt!(tag!("S")) >> blanks >> ids: identifier_list
+            >> (AST::Variables(ids))
+    ))
 );
 
-named!(constants<AST>,
-complete!(
-  do_parse!(
-    tag!("CONSTANT") >>
-    opt!(tag!("S")) >>
-    blanks >>
-    ids: identifier_list >>
-    (AST::Constants(ids))
-  )
-)
+named!(
+    constants<AST>,
+    complete!(do_parse!(
+        tag!("CONSTANT") >> opt!(tag!("S")) >> blanks >> ids: identifier_list
+            >> (AST::Constants(ids))
+    ))
 );
 
-named!(nextsr<AST>,
-complete!(
-  do_parse!(
+named!(
+    nextsr<AST>,
+    complete!(do_parse!(
     tag!("[][") >>
     opt!(blanks) >>
     id: identifier >>
@@ -130,27 +132,26 @@ complete!(
     opt!(blanks) >>
     vars: alt!(identifier | tuple) >>
     (AST::NextStateRelation(Box::new(id), Box::new(vars)))
-  )
-)
+  ))
 );
 
-named!(boolean<AST>,
-complete!(
-  map!(alt!(tag!("TRUE") | tag!("FALSE")), |b| AST::Boolean(b == b"TRUE"))
-)
+named!(
+    boolean<AST>,
+    complete!(map!(alt!(tag!("TRUE") | tag!("FALSE")), |b| {
+        AST::Boolean(b == b"TRUE")
+    }))
 );
 
-named!(atomic<AST>,
-  alt!(boolean | number | identifier | set | tuple | nextsr)
+named!(
+    atomic<AST>,
+    alt!(boolean | number | identifier | set | tuple | nextsr)
 );
 
-named!(binary_sub<AST>,
-  alt!(atomic | parens)
-);
+named!(binary_sub<AST>, alt!(atomic | parens));
 
-named!(binary<AST>,
-complete!(
-  do_parse!(
+named!(
+    binary<AST>,
+    complete!(do_parse!(
     lhs: binary_sub >>
     opt!(blanks) >>
     res: alt!(
@@ -167,17 +168,15 @@ complete!(
       )
     ) >>
     (res)
-  )
-)
+  ))
 );
 
-named!(proposition_sub<AST>,
-  alt!(binary | atomic | parens)
-);
+named!(proposition_sub<AST>, alt!(binary | atomic | parens));
 
-named!(proposition<AST>,
-complete!(
-  map!(do_parse!(
+named!(
+    proposition<AST>,
+    complete!(map!(
+        do_parse!(
     init: proposition_sub >>
     rest: many0!(
       complete!(alt!(
@@ -197,49 +196,40 @@ complete!(
       ))
     ) >>
     (init, rest)
-  ), |(init, rest)| {
-    rest.into_iter().fold(init, |acc, (op, node)| {
-      match op {
-        Oper::And => AST::Conjunction(Box::new(acc), Box::new(node)),
-        Oper::Or => AST::Disjunction(Box::new(acc), Box::new(node)),
-      }
-    })
-  })
-)
+  ),
+        |(init, rest)| {
+            rest.into_iter().fold(init, |acc, (op, node)| match op {
+                Oper::And => AST::Conjunction(Box::new(acc), Box::new(node)),
+                Oper::Or => AST::Disjunction(Box::new(acc), Box::new(node)),
+            })
+        }
+    ))
 );
 
-named!(parens<AST>,
-complete!(
-  do_parse!(
-    tag!("(") >>
-    opt!(blanks) >>
-    p: proposition >>
-    opt!(blanks) >>
-    tag!(")") >>
-    (p)
-  )
-)
+named!(
+    parens<AST>,
+    complete!(do_parse!(
+        tag!("(") >> opt!(blanks) >> p: proposition >> opt!(blanks) >> tag!(")") >> (p)
+    ))
 );
 
-named!(predicate<AST>,
-complete!(
-  do_parse!(
-    id: identifier >>
-    opt!(blanks) >>
-    tag!("==") >>
-    opt!(blanks) >>
-    expr: proposition >>
-    (AST::Predicate(Box::new(id), Box::new(expr)))
-  )
-)
+named!(
+    predicate<AST>,
+    complete!(do_parse!(
+        id: identifier >> opt!(blanks) >> tag!("==") >> opt!(blanks) >> expr: proposition
+            >> (AST::Predicate(Box::new(id), Box::new(expr)))
+    ))
 );
 
-named!(statement<AST>,
-  alt!(variables | constants | predicate)
-);
+named!(statement<AST>, alt!(variables | constants | predicate));
 
-named!(statements<Vec<AST>>,
-  delimited!(opt!(blanks), separated_list!(blanks, statement), opt!(blanks))
+named!(
+    statements<Vec<AST>>,
+    delimited!(
+        opt!(blanks),
+        separated_list!(blanks, statement),
+        opt!(blanks)
+    )
 );
 
 named!(pub parse<AST>,
@@ -348,17 +338,17 @@ mod tests {
     fn test_set() {
         let parse_ok = |i, r| parse_ok(set, i, r);
         parse_ok(b"{}", _set(vec![]));
-        parse_ok(b"{0}", _set(vec!(_num(0))));
-        parse_ok(b"{ 0,1 }", _set(vec!(_num(0), _num(1))));
-        parse_ok(b"{0, 1, a}", _set(vec!(_num(0), _num(1), _id("a"))));
-        parse_ok(b"{0, 1, TRUE}", _set(vec!(_num(0), _num(1), _bool(true))));
+        parse_ok(b"{0}", _set(vec![_num(0)]));
+        parse_ok(b"{ 0,1 }", _set(vec![_num(0), _num(1)]));
+        parse_ok(b"{0, 1, a}", _set(vec![_num(0), _num(1), _id("a")]));
+        parse_ok(b"{0, 1, TRUE}", _set(vec![_num(0), _num(1), _bool(true)]));
 
-        let subset = _set(vec!(_num(0), _num(1)));
-        parse_ok(b"{0, 1, {0, 1}}", _set(vec!(_num(0), _num(1), subset)));
+        let subset = _set(vec![_num(0), _num(1)]);
+        parse_ok(b"{0, 1, {0, 1}}", _set(vec![_num(0), _num(1), subset]));
 
         let eq = _eq(_num(0), _num(1));
         let conj = _conj(_bool(true), _id("A'"));
-        parse_ok(b"{0=1, TRUE/\\A'}", _set(vec!(eq, conj)));
+        parse_ok(b"{0=1, TRUE/\\A'}", _set(vec![eq, conj]));
 
         let parse_err = |i| assert!(set(i).is_err());
         parse_err(b"{,}");
@@ -370,17 +360,17 @@ mod tests {
     fn test_tuple() {
         let parse_ok = |i, r| parse_ok(tuple, i, r);
         parse_ok(b"<<>>", _tup(vec![]));
-        parse_ok(b"<<0>>", _tup(vec!(_num(0))));
-        parse_ok(b"<< 0,1 >>", _tup(vec!(_num(0), _num(1))));
-        parse_ok(b"<<0, 1, a>>", _tup(vec!(_num(0), _num(1), _id("a"))));
-        parse_ok(b"<<0, 1, TRUE>>", _tup(vec!(_num(0), _num(1), _bool(true))));
+        parse_ok(b"<<0>>", _tup(vec![_num(0)]));
+        parse_ok(b"<< 0,1 >>", _tup(vec![_num(0), _num(1)]));
+        parse_ok(b"<<0, 1, a>>", _tup(vec![_num(0), _num(1), _id("a")]));
+        parse_ok(b"<<0, 1, TRUE>>", _tup(vec![_num(0), _num(1), _bool(true)]));
 
-        let subset = _tup(vec!(_num(0), _num(1)));
-        parse_ok(b"<<0, 1, <<0, 1>>>>", _tup(vec!(_num(0), _num(1), subset)));
+        let subset = _tup(vec![_num(0), _num(1)]);
+        parse_ok(b"<<0, 1, <<0, 1>>>>", _tup(vec![_num(0), _num(1), subset]));
 
         let eq = _eq(_num(0), _num(1));
         let conj = _conj(_bool(true), _id("A'"));
-        parse_ok(b"<<0=1, TRUE/\\A'>>", _tup(vec!(eq, conj)));
+        parse_ok(b"<<0=1, TRUE/\\A'>>", _tup(vec![eq, conj]));
 
         let parse_err = |i| assert!(set(i).is_err());
         parse_err(b"<<,>>");
@@ -395,24 +385,24 @@ mod tests {
         parse_ok(b"[][Next]_<<>>", _nsr(_id("Next"), _tup(vec![])));
         parse_ok(b"[][ Next ]_<<>>", _nsr(_id("Next"), _tup(vec![])));
 
-        let tup = _tup(vec!(_id("a"), _id("b")));
+        let tup = _tup(vec![_id("a"), _id("b")]);
         parse_ok(b"[][Next]_ << a, b >>", _nsr(_id("Next"), tup));
     }
 
     #[test]
     fn test_variables() {
         let parse_ok = |i, r| parse_ok(variables, i, r);
-        parse_ok(b"VARIABLE a", _vars(vec!(_id("a"))));
-        parse_ok(b"VARIABLE a,b", _vars(vec!(_id("a"), _id("b"))));
-        parse_ok(b"VARIABLES a, b", _vars(vec!(_id("a"), _id("b"))));
+        parse_ok(b"VARIABLE a", _vars(vec![_id("a")]));
+        parse_ok(b"VARIABLE a,b", _vars(vec![_id("a"), _id("b")]));
+        parse_ok(b"VARIABLES a, b", _vars(vec![_id("a"), _id("b")]));
     }
 
     #[test]
     fn test_constants() {
         let parse_ok = |i, r| parse_ok(constants, i, r);
-        parse_ok(b"CONSTANT a", _consts(vec!(_id("a"))));
-        parse_ok(b"CONSTANT a,b", _consts(vec!(_id("a"), _id("b"))));
-        parse_ok(b"CONSTANTS a, b", _consts(vec!(_id("a"), _id("b"))));
+        parse_ok(b"CONSTANT a", _consts(vec![_id("a")]));
+        parse_ok(b"CONSTANT a,b", _consts(vec![_id("a"), _id("b")]));
+        parse_ok(b"CONSTANTS a, b", _consts(vec![_id("a"), _id("b")]));
     }
 
     #[test]
@@ -491,9 +481,9 @@ mod tests {
     fn test_statements() {
         let parse_ok = |i, v: &Vec<AST>| assert_eq!(statements(i).unwrap().1, *v);
 
-        let vars = _vars(vec!(_id("clock")));
-        let consts = _consts(vec!(_id("Data")));
-        let res = vec!(vars, consts);
+        let vars = _vars(vec![_id("clock")]);
+        let consts = _consts(vec![_id("Data")]);
+        let res = vec![vars, consts];
         parse_ok(b"VARIABLES clock CONSTANTS Data", &res);
         parse_ok(b"VARIABLES clock CONSTANTS Data ", &res);
         parse_ok(b" VARIABLES clock CONSTANTS Data", &res);
@@ -501,26 +491,26 @@ mod tests {
         parse_ok(b" VARIABLES clock(*comment*)CONSTANTS Data ", &res);
         parse_ok(b" VARIABLES clock (* comment *) CONSTANTS Data ", &res);
 
-        let vars = _vars(vec!(_id("clock")));
-        let consts = _consts(vec!(_id("Data")));
-        let res = vec!(consts, vars);
+        let vars = _vars(vec![_id("clock")]);
+        let consts = _consts(vec![_id("Data")]);
+        let res = vec![consts, vars];
         parse_ok(b" CONSTANTS Data VARIABLES clock ", &res);
 
-        let consts = _consts(vec!(_id("Data")));
+        let consts = _consts(vec![_id("Data")]);
         let init = _pred(_id("Init"), _eq(_id("a"), _num(1)));
-        let res = vec!(consts, init);
+        let res = vec![consts, init];
         parse_ok(b" CONSTANTS Data Init == a = 1 ", &res);
 
-        let vars = _vars(vec!(_id("clock")));
-        let consts = _consts(vec!(_id("Data")));
+        let vars = _vars(vec![_id("clock")]);
+        let consts = _consts(vec![_id("Data")]);
         let init = _pred(
             _id("Init"),
-            _mem(_id("clock"), _set(vec!(_num(0), _num(1)))),
+            _mem(_id("clock"), _set(vec![_num(0), _num(1)])),
         );
         let step = _pred(_id("Step"), _eq(_id("clock'"), _num(1)));
         let nxsr = _nsr(_id("Next"), _id("clock"));
         let spec = _pred(_id("Spec"), _conj(_id("Init"), nxsr));
-        let statements = vec!(vars, consts, init, step, spec);
+        let statements = vec![vars, consts, init, step, spec];
         parse_ok(
             b"
 VARIABLES clock \\* Single-line comment.
@@ -540,8 +530,8 @@ Spec == Init /\\ [][Next]_clock (*
         parse_ok(b"----MODULE Test----====", _mod(_id("Test"), vec![]));
         parse_ok(b" ---- MODULE\nTest----\n==== ", _mod(_id("Test"), vec![]));
 
-        let vars = _vars(vec!(_id("clock")));
-        let consts = _consts(vec!(_id("Data")));
+        let vars = _vars(vec![_id("clock")]);
+        let consts = _consts(vec![_id("Data")]);
         parse_ok(
             b"
 ---- MODULE(* Comment here. *)Test(* And here. *)----
@@ -549,10 +539,10 @@ VARIABLES clock
 CONSTANTS Data
 ====
         ",
-            _mod(_id("Test"), vec!(vars, consts)),
+            _mod(_id("Test"), vec![vars, consts]),
         );
 
-        let vars = _vars(vec!(_id("clock")));
+        let vars = _vars(vec![_id("clock")]);
         parse_ok(
             b"
 Random stuff before.
@@ -562,7 +552,7 @@ VARIABLES clock
 CONSTANTS Data
 Moar random stuff after.
         ",
-            _mod(_id("Test"), vec!(vars)),
+            _mod(_id("Test"), vec![vars]),
         );
     }
 }

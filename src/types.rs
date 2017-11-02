@@ -5,12 +5,6 @@
 pub type Value = u64;
 pub type Ident = String;
 
-// Connectives.
-pub enum Oper {
-    And,
-    Or,
-}
-
 // AST node types.
 #[derive(Clone, Debug, PartialEq)]
 pub enum AST {
