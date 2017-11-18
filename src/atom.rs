@@ -1,124 +1,177 @@
 // Licensed under MIT. See LICENSE for details.
 
-use state::{State, merge};
+use state::State;
 use types::*;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Atom {
     // A /\ B
-    // [two children]
-    Conjunction(Box<Atom>, Box<Atom>),
+    Conjunction(Box<ConjunctionAtom>),
     // A \/ B
-    // [two children]
-    Disjunction(Box<Atom>, Box<Atom>),
+    Disjunction(Box<DisjunctionAtom>),
     // a = b
-    // [two children]
-    Equality(Box<Atom>, Box<Atom>),
-    // [no children]
+    Equality(Box<EqualityAtom>),
+    // Init
     Identifier(Ident),
     // id \in 0..1
-    // [two children]
-    MemberOf(Box<Atom>, Box<Atom>),
-    // [no children]
+    MemberOf(Box<MemberOfAtom>),
+    // 12345
     Number(Value),
     // [][Next]_vars
-    // [one child]
     NextStateRelation(Box<Atom>, Vec<Ident>),
     // {0,1,2}
     Set(Vec<Atom>),
     // State == A /\ (B \/ C)
-    // [one child]
-    StatePredicate(Ident, Box<Atom>),
+    StatePredicate(Box<StatePredicateAtom>),
 }
 
 impl Atom {
     pub fn initial_states(&self, state: &State) -> Vec<State> {
         match *self {
-            Atom::Conjunction(ref lhs, ref rhs) => {
-                merge(lhs.initial_states(state), rhs.initial_states(state))
-            }
-            Atom::Disjunction(ref lhs, ref rhs) => {
-                [lhs, rhs]
-                    .iter()
-                    // TODO remove duplicate states
-                    .flat_map(|ref c| c.initial_states(state))
-                    .collect()
-            }
-            Atom::Equality(ref lhs, ref rhs) => {
-                if let Atom::Identifier(ref id) = **lhs {
-                    let val = match **rhs {
-                        Atom::Number(ref val) => *val,
-                        Atom::Identifier(ref rid) => {
-                            match state.get(rid) {
-                                Some(val) => *val,
-                                None => {
-                                    match state.get(id) {
-                                        Some(val) => return vec![state.extend(rid.clone(), *val)],
-                                        None => panic!("variable {} and {} not defined", id, rid),
-                                    }
-                                }
-                            }
-                        }
-                        _ => panic!("invalid rhs type"),
-                    };
-
-                    return vec![state.extend(id.clone(), val)];
-                }
-
-                if let Atom::Number(ref val) = **lhs {
-                    return match **rhs {
-                        Atom::Number(ref rval) => {
-                            if val == rval {
-                                vec![state.clone()]
-                            } else {
-                                vec![]
-                            }
-                        }
-                        Atom::Identifier(ref id) => vec![state.extend(id.clone(), *val)],
-                        _ => panic!("invalid rhs type"),
-                    };
-                }
-
-                panic!("invalid lhs type");
-            }
-            Atom::MemberOf(ref lhs, ref rhs) => {
-                if let Atom::Identifier(ref id) = **lhs {
-                    if let Atom::Set(ref vals) = **rhs {
-                        return vals.iter()
-                            .map(|v| {
-                                if let Atom::Number(ref n) = *v {
-                                    return state.extend(id.clone(), *n);
-                                }
-
-                                panic!("sets support only numbers for now");
-                            })
-                            .collect();
-                    }
-
-                    panic!("invalid rhs type");
-                }
-
-                if let Atom::Number(ref val) = **lhs {
-                    if let Atom::Set(ref vals) = **rhs {
-                        let contains = vals.iter().any(|v| {
-                            if let Atom::Number(ref n) = *v {
-                                return n == val;
-                            }
-
-                            panic!("sets support only numbers for now");
-                        });
-
-                        return if contains { vec![state.clone()] } else { vec![] };
-                    }
-
-                    panic!("invalid rhs type");
-                }
-
-                panic!("invalid lhs type");
-            }
-            Atom::StatePredicate(ref _id, ref rhs) => rhs.initial_states(state),
-            _ => panic!(""), // TODO remove this
+            Atom::Conjunction(ref imp) => imp.initial_states(state),
+            Atom::Disjunction(ref imp) => imp.initial_states(state),
+            Atom::Equality(ref imp) => imp.initial_states(state),
+            Atom::MemberOf(ref imp) => imp.initial_states(state),
+            Atom::StatePredicate(ref imp) => imp.initial_states(state),
+            _ => panic!(""), // TODO Result/Err
         }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ConjunctionAtom {
+    lhs: Box<Atom>,
+    rhs: Box<Atom>,
+}
+
+impl ConjunctionAtom {
+    fn initial_states(&self, state: &State) -> Vec<State> {
+        State::merge(
+            self.lhs.initial_states(state),
+            self.rhs.initial_states(state),
+        )
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct DisjunctionAtom {
+    lhs: Box<Atom>,
+    rhs: Box<Atom>,
+}
+
+impl DisjunctionAtom {
+    // TODO remove duplicate states
+    fn initial_states(&self, state: &State) -> Vec<State> {
+        [&self.lhs, &self.rhs]
+            .iter()
+            .flat_map(|c| c.initial_states(state))
+            .collect()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct EqualityAtom {
+    lhs: Box<Atom>,
+    rhs: Box<Atom>,
+}
+
+impl EqualityAtom {
+    fn initial_states(&self, state: &State) -> Vec<State> {
+        if let Atom::Identifier(ref id) = *self.lhs {
+            let val = match *self.rhs {
+                Atom::Number(ref val) => *val,
+                Atom::Identifier(ref rid) => {
+                    match state.get(rid) {
+                        Some(val) => *val,
+                        None => {
+                            match state.get(id) {
+                                Some(val) => return vec![state.extend(rid.clone(), *val)],
+                                None => panic!("variable {} and {} not defined", id, rid),
+                            }
+                        }
+                    }
+                }
+                _ => panic!("invalid rhs type"),
+            };
+
+            return vec![state.extend(id.clone(), val)];
+        }
+
+        if let Atom::Number(ref val) = *self.lhs {
+            return match *self.rhs {
+                Atom::Number(ref rval) => {
+                    if val == rval {
+                        vec![state.clone()]
+                    } else {
+                        vec![]
+                    }
+                }
+                Atom::Identifier(ref id) => vec![state.extend(id.clone(), *val)],
+                _ => panic!("invalid rhs type"),
+            };
+        }
+
+        panic!("invalid lhs type");
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct MemberOfAtom {
+    lhs: Box<Atom>,
+    rhs: Box<Atom>,
+}
+
+impl MemberOfAtom {
+    fn initial_states(&self, state: &State) -> Vec<State> {
+        if let Atom::Identifier(ref id) = *self.lhs {
+            if let Atom::Set(ref vals) = *self.rhs {
+                return vals.iter()
+                    .map(|v| {
+                        if let Atom::Number(ref n) = *v {
+                            return state.extend(id.clone(), *n);
+                        }
+
+                        panic!("sets support only numbers for now");
+                    })
+                    .collect();
+            }
+
+            panic!("invalid rhs type");
+        }
+
+        if let Atom::Number(ref val) = *self.lhs {
+            if let Atom::Set(ref vals) = *self.rhs {
+                let contains = vals.iter().any(|v| {
+                    if let Atom::Number(ref n) = *v {
+                        return n == val;
+                    }
+
+                    panic!("sets support only numbers for now");
+                });
+
+                return if contains {
+                    vec![state.clone()]
+                } else {
+                    vec![]
+                };
+            }
+
+            panic!("invalid rhs type");
+        }
+
+        panic!("invalid lhs type");
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct StatePredicateAtom {
+    id: Box<Atom>,
+    pred: Box<Atom>,
+}
+
+impl StatePredicateAtom {
+    fn initial_states(&self, state: &State) -> Vec<State> {
+        self.pred.initial_states(state)
     }
 }
 
@@ -146,10 +199,10 @@ mod tests {
         AST::Predicate(_b(id), _b(expr))
     }*/
     fn _eq(a: Atom, b: Atom) -> Atom {
-        Atom::Equality(_b(a), _b(b))
+        Atom::Equality(_b(EqualityAtom { lhs: _b(a), rhs: _b(b) }))
     }
     fn _mem(a: Atom, b: Atom) -> Atom {
-        Atom::MemberOf(_b(a), _b(b))
+        Atom::MemberOf(_b(MemberOfAtom { lhs: _b(a), rhs: _b(b) }))
     }
     /*fn _conj(a: AST, b: AST) -> AST {
         AST::Conjunction(_b(a), _b(b))

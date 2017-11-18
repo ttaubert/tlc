@@ -24,7 +24,7 @@ impl State {
         Self { vars }
     }
 
-    pub fn merge(&self, other: &Self) -> Self {
+    pub fn merge_with(&self, other: &Self) -> Self {
         let mut vars = self.vars.clone();
         for (id, val) in &other.vars {
             vars.insert(id.clone(), *val);
@@ -42,16 +42,16 @@ impl State {
 
         false
     }
-}
 
-pub fn merge(a: Vec<State>, b: Vec<State>) -> Vec<State> {
-    let mut rv = vec![];
-    for sta in a {
-        for stb in &b {
-            if !sta.contradicts(stb) {
-                rv.push(sta.merge(stb))
+    pub fn merge(a: Vec<State>, b: Vec<State>) -> Vec<State> {
+        let mut rv = vec![];
+        for sta in a {
+            for stb in &b {
+                if !sta.contradicts(stb) {
+                    rv.push(sta.merge_with(stb))
+                }
             }
         }
+        rv
     }
-    rv
 }
