@@ -14,6 +14,6 @@ Spec == Init /\ [][Next]_clock
 
 =============================================================================
 \* Modification History
-\* Last modified Thu Nov 02 03:04:07 CET 2017 by ttaubert
-\* Created Sat Oct 21 23:03:28 CEST 2017 by ttaubert
+\* Last modified Mon Jan 01 01:01:01 CET 1970 by ttaubert
+\* Created Mon Jan 01 01:01:01 CEST 1970 by ttaubert
 

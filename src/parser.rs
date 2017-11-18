@@ -2,7 +2,7 @@
 
 use std::str::from_utf8;
 
-use nom::{digit, eol, multispace, non_empty, not_line_ending, space};
+use nom::{IResult, digit, eol, multispace, non_empty, not_line_ending, space};
 
 use types::AST;
 
@@ -230,7 +230,7 @@ named!(
     )
 );
 
-named!(pub parse<AST>,
+named!(module<AST>,
 complete!(
     do_parse!(
         take_until_and_consume!("----") >>
@@ -251,11 +251,16 @@ complete!(
     )
 );
 
+pub fn parse(bytes: &[u8]) -> Result<AST, ()> {
+    match module(bytes) {
+        IResult::Done(b"", node) => Ok(node),
+        _ => Err(()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{blanks, constants, nextsr, number, parse, predicate, proposition, set, statements,
-                tuple, variables, AST};
-
+    use super::*;
     use nom;
 
     // Some test helpers.
@@ -524,7 +529,7 @@ Spec == Init /\\ [][Next]_clock (*
 
     #[test]
     fn test_parse() {
-        let parse_ok = |i, r| parse_ok(parse, i, r);
+        let parse_ok = |i, r| parse_ok(module, i, r);
         parse_ok(b"----MODULE Test----====", _mod(_id("Test"), vec![]));
         parse_ok(b" ---- MODULE\nTest----\n==== ", _mod(_id("Test"), vec![]));
 

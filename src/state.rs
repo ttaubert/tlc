@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use types::*;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct State {
     vars: HashMap<Ident, Value>,
 }
@@ -42,4 +42,16 @@ impl State {
 
         false
     }
+}
+
+pub fn merge(a: Vec<State>, b: Vec<State>) -> Vec<State> {
+    let mut rv = vec![];
+    for sta in a {
+        for stb in &b {
+            if !sta.contradicts(stb) {
+                rv.push(sta.merge(stb))
+            }
+        }
+    }
+    rv
 }

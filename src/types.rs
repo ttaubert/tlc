@@ -21,31 +21,3 @@ pub enum AST {
     Tuple(Vec<AST>),
     Variables(Vec<AST>),
 }
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum Atom {
-    // A /\ B
-    // [two children]
-    Conjunction(Box<Atom>, Box<Atom>),
-    // A \/ B
-    // [two children]
-    Disjunction(Box<Atom>, Box<Atom>),
-    // a = b
-    // [two children]
-    Equality(Box<Atom>, Box<Atom>),
-    // [no children]
-    Identifier(Ident),
-    // id \in 0..1
-    // [two children]
-    MemberOf(Box<Atom>, Box<Atom>),
-    // [no children]
-    Number(Value),
-    // [][Next]_vars
-    // [one child]
-    NextStateRelation(Box<Atom>, Vec<Ident>),
-    // {0,1,2}
-    Set(Vec<Atom>),
-    // State == A /\ (B \/ C)
-    // [one child]
-    StatePredicate(Ident, Box<Atom>),
-}

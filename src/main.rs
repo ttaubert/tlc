@@ -2,93 +2,11 @@
 
 extern crate rtlc;
 
-// use parser::combination;
-use rtlc::state::State;
-use rtlc::types::*;
+use std::process;
+
+use rtlc::parser::parse;
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
-
-fn merge_states(a: Vec<State>, b: Vec<State>) -> Vec<State> {
-    let mut rv = vec![];
-    for sta in a {
-        for stb in &b {
-            if !sta.contradicts(stb) {
-                rv.push(sta.merge(stb))
-            }
-        }
-    }
-    rv
-}
-
-fn states(atom: &Atom, state: &State) -> Vec<State> {
-    match *atom {
-        Atom::Conjunction(ref lhs, ref rhs) => merge_states(states(lhs, state), states(rhs, state)),
-        Atom::Disjunction(ref lhs, ref rhs) => {
-            [lhs, rhs]
-                .iter()
-                .flat_map(|ref c| states(c, state))
-                .collect()
-        }
-        Atom::Equality(ref lhs, ref rhs) => {
-            if let Atom::Identifier(ref id) = **lhs {
-                let val = match **rhs {
-                    Atom::Number(ref val) => *val,
-                    Atom::Identifier(ref rid) => {
-                        match state.get(rid) {
-                            Some(val) => *val,
-                            None => {
-                                match state.get(id) {
-                                    Some(val) => return vec![state.extend(rid.clone(), *val)],
-                                    None => panic!("variable {} and {} not defined", id, rid),
-                                }
-                            }
-                        }
-                    }
-                    _ => panic!("invalid rhs type"),
-                };
-
-                return vec![state.extend(id.clone(), val)];
-            }
-
-            if let Atom::Number(ref val) = **lhs {
-                return match **rhs {
-                    Atom::Number(ref rval) => {
-                        if val == rval {
-                            vec![state.clone()]
-                        } else {
-                            vec![]
-                        }
-                    }
-                    Atom::Identifier(ref id) => vec![state.extend(id.clone(), *val)],
-                    _ => panic!("invalid rhs type"),
-                };
-            }
-
-            panic!("invalid lhs type");
-        }
-        Atom::MemberOf(ref lhs, ref rhs) => {
-            if let Atom::Identifier(ref id) = **lhs {
-                if let Atom::Set(ref vals) = **rhs {
-                    return vals.iter()
-                        .map(|v| {
-                            if let Atom::Number(ref n) = *v {
-                                return state.extend(id.clone(), *n);
-                            }
-
-                            panic!("sets support only numbers for now");
-                        })
-                        .collect();
-                }
-
-                panic!("invalid rhs type");
-            }
-
-            panic!("invalid lhs type");
-        }
-        Atom::StatePredicate(_, ref rhs) => states(rhs, state),
-        _ => panic!("unsupported type in states()"),
-    }
-}
 
 /*fn next_states(arena: &Arena<Atom>, node: &NodeId, state: &State) -> Vec<State> {
   match arena[*node].data {
@@ -123,30 +41,25 @@ fn states(atom: &Atom, state: &State) -> Vec<State> {
 }*/
 
 fn main() {
-    /*let state = State::new();
-  let init = Atom::Equality(Box::new(Atom::Identifier(String::from("a"))), Box::new(Atom::Number(0)));
-  println!("a=0 --- {:?}", states(&init, &state));
+    println!("         ______ __    ______  ");
+    println!("   _____/_  __// /   / ____/  ");
+    println!("  / ___/ / /  / /   / /       ");
+    println!(" / /    / /  / /___/ /___     ");
+    println!("/_/    /_/  /_____/\\____/ v{}", VERSION);
+    println!();
 
-  let init = Atom::Equality(Box::new(Atom::Number(0)), Box::new(Atom::Identifier(String::from("a"))));
-  println!("0=a --- {:?}", states(&init, &state));
+    println!("Parsing SimpleClock.tla");
+    let bytes = parse(include_bytes!("../assets/SimpleClock.tla"));
 
-  let init = Atom::Equality(Box::new(Atom::Number(0)), Box::new(Atom::Number(0)));
-  println!("0=0 --- {:?}", states(&init, &state));
+    let _ast = match bytes {
+        Ok(module) => module,
+        _ => {
+            println!("Failed to parse SimpleClock.tla!");
+            process::exit(1);
+        }
+    };
 
-  let init = Atom::Equality(Box::new(Atom::Number(0)), Box::new(Atom::Number(1)));
-  println!("0=1 --- {:?}", states(&init, &state));
-
-  let state = state.extend(String::from("b"), 2);
-  let init = Atom::Equality(Box::new(Atom::Identifier(String::from("a"))), Box::new(Atom::Identifier(String::from("b"))));
-  println!("a=b --- {:?}", states(&init, &state));
-
-  let init = Atom::Equality(Box::new(Atom::Identifier(String::from("b"))), Box::new(Atom::Identifier(String::from("a"))));
-  println!("b=a --- {:?}", states(&init, &state));
-
-  //let init = Atom::Equality(Box::new(Atom::Identifier(String::from("c"))), Box::new(Atom::Identifier(String::from("d"))));
-  //println!("c=d --- {:?}", states(&init, &state));
-
-
+    /*
   // clock \in {0,1}
   let pred = combination(b"clock \\in {0,1}").unwrap().1;
   // Init == clock \in {0,1}
@@ -184,13 +97,6 @@ fn main() {
   // XXX TLC next rewrites the next-state relation as a disjunction of as many simple subactions as possible.
   // XXX Find the list of possible subactions
   // MemberOf ... Disjunction
-
-  println!();
-
-  {
-    let init = combination(b"a \\in {0,1}").unwrap().1;
-    println!("a \\in [0,1] --- {:?}", states(&init, &State::new()));
-  }
 
   {
     let init = combination(b"a=0 \\/ a=1").unwrap().1;
@@ -230,27 +136,7 @@ fn main() {
   let state = State::new();
   let ini_states = states(&init, &state);
 
-  println!("  ________    ___            ________              __               ");
-  println!(" /_  __/ /   /   |   __     / ____/ /_  ___  _____/ /_____  _____   ");
-  println!("  / / / /   / /| |__/ /_   / /   / __ \\/ _ \\/ ___/ //_/ _ \\/ ___/");
-  println!(" / / / /___/ ___ /_  __/  / /___/ / / /  __/ /__/ ,< /  __/ /       ");
-  println!("/_/ /_____/_/  |_|/_/     \\____/_/ /_/\\___/\\___/_/|_|\\___/_/ v{}", VERSION);
-  println!();
-  println!("Found {} distinct initial states.", ini_states.len());
-  println!("\nSimpleClock::Init {:?}", ini_states);
-  println!();*/
-
-
-
-    /*
-        ________    ______
-   ____/_  __/ /   / ____/
-  / ___// / / /   / /     
- / /   / / / /___/ /___   
-/_/   /_/ /_____/\____/   
-*/
-
-    /*{
+    {
     let mut arena = Arena::new();
     let next = arena.new_node(Atom::Equality(String::from("a"), 0));
     println!("a=0 --- {:?}", next_states(&arena, &next, &ini_states[0]));
