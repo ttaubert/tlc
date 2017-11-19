@@ -14,6 +14,10 @@ impl State {
         Self { vars: HashMap::new() }
     }
 
+    pub fn has(&self, id: &Ident) -> bool {
+        self.vars.contains_key(id)
+    }
+
     pub fn get(&self, id: &Ident) -> Option<&Value> {
         self.vars.get(id)
     }

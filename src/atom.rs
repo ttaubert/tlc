@@ -1,7 +1,19 @@
 // Licensed under MIT. See LICENSE for details.
 
+use std::mem;
+
 use state::State;
 use types::*;
+
+// TODO
+pub enum PossibleStatesError {
+}
+
+pub enum Value2 {
+    Number(i64),
+    Set(Vec<Value2>),
+    String(String),
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Atom {
@@ -26,13 +38,28 @@ pub enum Atom {
 }
 
 impl Atom {
-    pub fn initial_states(&self, state: &State) -> Vec<State> {
+    pub fn is_identifier_without_value(&self, state: &State) -> bool {
         match *self {
-            Atom::Conjunction(ref imp) => imp.initial_states(state),
-            Atom::Disjunction(ref imp) => imp.initial_states(state),
-            Atom::Equality(ref imp) => imp.initial_states(state),
-            Atom::MemberOf(ref imp) => imp.initial_states(state),
-            Atom::StatePredicate(ref imp) => imp.initial_states(state),
+            Atom::Identifier(ref id) => !state.has(id),
+            _ => false,
+        }
+    }
+
+    pub fn value(&self, state: &State) -> Value {
+        match *self {
+            Atom::Identifier(ref id) => *state.get(id).expect("identifier must have a value"),
+            Atom::Number(ref val) => *val,
+            _ => panic!("unsupported atom type for value()"),
+        }
+    }
+
+    pub fn possible_states(&self, state: &State) -> Vec<State> {
+        match *self {
+            Atom::Conjunction(ref imp) => imp.possible_states(state),
+            Atom::Disjunction(ref imp) => imp.possible_states(state),
+            Atom::Equality(ref imp) => imp.possible_states(state),
+            Atom::MemberOf(ref imp) => imp.possible_states(state),
+            Atom::StatePredicate(ref imp) => imp.possible_states(state),
             _ => panic!(""), // TODO Result/Err
         }
     }
@@ -45,10 +72,10 @@ pub struct ConjunctionAtom {
 }
 
 impl ConjunctionAtom {
-    fn initial_states(&self, state: &State) -> Vec<State> {
+    fn possible_states(&self, state: &State) -> Vec<State> {
         State::merge(
-            self.lhs.initial_states(state),
-            self.rhs.initial_states(state),
+            self.lhs.possible_states(state),
+            self.rhs.possible_states(state),
         )
     }
 }
@@ -61,10 +88,10 @@ pub struct DisjunctionAtom {
 
 impl DisjunctionAtom {
     // TODO remove duplicate states
-    fn initial_states(&self, state: &State) -> Vec<State> {
+    fn possible_states(&self, state: &State) -> Vec<State> {
         [&self.lhs, &self.rhs]
             .iter()
-            .flat_map(|c| c.initial_states(state))
+            .flat_map(|c| c.possible_states(state))
             .collect()
     }
 }
@@ -76,42 +103,30 @@ pub struct EqualityAtom {
 }
 
 impl EqualityAtom {
-    fn initial_states(&self, state: &State) -> Vec<State> {
-        if let Atom::Identifier(ref id) = *self.lhs {
-            let val = match *self.rhs {
-                Atom::Number(ref val) => *val,
-                Atom::Identifier(ref rid) => {
-                    match state.get(rid) {
-                        Some(val) => *val,
-                        None => {
-                            match state.get(id) {
-                                Some(val) => return vec![state.extend(rid.clone(), *val)],
-                                None => panic!("variable {} and {} not defined", id, rid),
-                            }
-                        }
-                    }
-                }
-                _ => panic!("invalid rhs type"),
-            };
+    fn possible_states(&self, state: &State) -> Vec<State> {
+        let mut lhs = &self.lhs;
+        let mut rhs = &self.rhs;
 
-            return vec![state.extend(id.clone(), val)];
+        // Move a value-less identifier to the left.
+        if rhs.is_identifier_without_value(state) {
+            if lhs.is_identifier_without_value(state) {
+                panic!("at least one of two variables must be defined");
+            }
+
+            mem::swap(&mut lhs, &mut rhs);
         }
 
-        if let Atom::Number(ref val) = *self.lhs {
-            return match *self.rhs {
-                Atom::Number(ref rval) => {
-                    if val == rval {
-                        vec![state.clone()]
-                    } else {
-                        vec![]
-                    }
-                }
-                Atom::Identifier(ref id) => vec![state.extend(id.clone(), *val)],
-                _ => panic!("invalid rhs type"),
-            };
+        // If an identifier is on the left, update its state value.
+        if let Atom::Identifier(ref id) = **lhs {
+            return vec![state.extend(id.clone(), rhs.value(state))];
         }
 
-        panic!("invalid lhs type");
+        // Compare values and return or clear the states.
+        if lhs.value(state) == rhs.value(state) {
+            vec![state.clone()]
+        } else {
+            vec![]
+        }
     }
 }
 
@@ -122,7 +137,12 @@ pub struct MemberOfAtom {
 }
 
 impl MemberOfAtom {
-    fn initial_states(&self, state: &State) -> Vec<State> {
+    fn possible_states(&self, state: &State) -> Vec<State> {
+        // TODO if id, get value of lhs, must exist
+        // TODO if num, that's the value
+        // TODO get rhs seequence values
+        // TODO generate new state, if any
+
         if let Atom::Identifier(ref id) = *self.lhs {
             if let Atom::Set(ref vals) = *self.rhs {
                 return vals.iter()
@@ -170,8 +190,8 @@ pub struct StatePredicateAtom {
 }
 
 impl StatePredicateAtom {
-    fn initial_states(&self, state: &State) -> Vec<State> {
-        self.pred.initial_states(state)
+    fn possible_states(&self, state: &State) -> Vec<State> {
+        self.pred.possible_states(state)
     }
 }
 
@@ -199,10 +219,16 @@ mod tests {
         AST::Predicate(_b(id), _b(expr))
     }*/
     fn _eq(a: Atom, b: Atom) -> Atom {
-        Atom::Equality(_b(EqualityAtom { lhs: _b(a), rhs: _b(b) }))
+        Atom::Equality(_b(EqualityAtom {
+            lhs: _b(a),
+            rhs: _b(b),
+        }))
     }
     fn _mem(a: Atom, b: Atom) -> Atom {
-        Atom::MemberOf(_b(MemberOfAtom { lhs: _b(a), rhs: _b(b) }))
+        Atom::MemberOf(_b(MemberOfAtom {
+            lhs: _b(a),
+            rhs: _b(b),
+        }))
     }
     /*fn _conj(a: AST, b: AST) -> AST {
         AST::Conjunction(_b(a), _b(b))
@@ -224,24 +250,24 @@ mod tests {
     }*/
 
     #[test]
-    fn test_initial_states_eq() {
+    fn test_possible_states_eq() {
         // Init == a = 0
         let init = _eq(_id("a"), _num(0));
         let expected = State::new().extend("a".to_string(), 0);
-        assert_eq!(init.initial_states(&State::new()), vec![expected]);
+        assert_eq!(init.possible_states(&State::new()), vec![expected]);
 
         // Init == 0 = a
         let init = _eq(_num(0), _id("a"));
         let expected = State::new().extend("a".to_string(), 0);
-        assert_eq!(init.initial_states(&State::new()), vec![expected]);
+        assert_eq!(init.possible_states(&State::new()), vec![expected]);
 
         // Init == 0 = 0
         let init = _eq(_num(0), _num(0));
-        assert_eq!(init.initial_states(&State::new()), vec![State::new()]);
+        assert_eq!(init.possible_states(&State::new()), vec![State::new()]);
 
         // Init == 0 = 1
         let init = _eq(_num(0), _num(1));
-        assert_eq!(init.initial_states(&State::new()), vec![]);
+        assert_eq!(init.possible_states(&State::new()), vec![]);
 
         // Init == a = b  [with a=2]
         let init = _eq(_id("a"), _id("b"));
@@ -250,7 +276,7 @@ mod tests {
             "b".to_string(),
             2,
         );
-        assert_eq!(init.initial_states(&state), vec![expected]);
+        assert_eq!(init.possible_states(&state), vec![expected]);
 
         // Init == b = a  [with a=2]
         let init = _eq(_id("b"), _id("a"));
@@ -258,23 +284,23 @@ mod tests {
             "b".to_string(),
             2,
         );
-        assert_eq!(init.initial_states(&state), vec![expected]);
+        assert_eq!(init.possible_states(&state), vec![expected]);
     }
 
     #[test]
-    fn test_initial_states_mem() {
+    fn test_possible_states_mem() {
         // Init == 0 \in {0,1}
         let init = _mem(_num(0), _set(vec![_num(0), _num(1)]));
-        assert_eq!(init.initial_states(&State::new()), vec![State::new()]);
+        assert_eq!(init.possible_states(&State::new()), vec![State::new()]);
 
         // Init == 2 \in {0,1}
         let init = _mem(_num(2), _set(vec![_num(0), _num(1)]));
-        assert_eq!(init.initial_states(&State::new()), vec![]);
+        assert_eq!(init.possible_states(&State::new()), vec![]);
 
         // Init == a \in {0,1}
         let init = _mem(_id("a"), _set(vec![_num(0), _num(1)]));
         let exp1 = State::new().extend("a".to_string(), 0);
         let exp2 = State::new().extend("a".to_string(), 1);
-        assert_eq!(init.initial_states(&State::new()), vec![exp1, exp2]);
+        assert_eq!(init.possible_states(&State::new()), vec![exp1, exp2]);
     }
 }
