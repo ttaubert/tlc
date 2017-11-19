@@ -98,41 +98,6 @@ fn main() {
   // XXX Find the list of possible subactions
   // MemberOf ... Disjunction
 
-  {
-    let init = combination(b"a=0 \\/ a=1").unwrap().1;
-    println!("a=0 \\/ a=1 --- {:?}", states(&init, &State::new()));
-  }
-
-  {
-    let init = combination(b"a=0 /\\ a=1").unwrap().1;
-    println!("a=0 /\\ a=1 --- {:?}", states(&init, &State::new()));
-  }
-
-  {
-    let init = combination(b"a=0 /\\ a \\in {0,1}").unwrap().1;
-    println!("a=0 /\\ a \\in [0,1] --- {:?}", states(&init, &State::new()));
-  }
-
-  {
-    let init = combination(b"a=2 /\\ a \\in {0,1}").unwrap().1;
-    println!("a=2 /\\ a \\in [0,1] --- {:?}", states(&init, &state));
-  }
-
-  {
-    let init = combination(b"(a=0 \\/ a=1) /\\ (a=1 \\/ a=2)").unwrap().1;
-    println!("(a=0 \\/ a=1) /\\ (a=1 \\/ a=2) --- {:?}", states(&init, &State::new()));
-  }
-
-  {
-    let init = combination(b"(a=0 \\/ a=1) /\\ (a=1 /\\ a=2)").unwrap().1;
-    println!("(a=0 \\/ a=1) /\\ (a=1 /\\ a=2) --- {:?}", states(&init, &State::new()));
-  }
-
-  {
-    let init = combination(b"(a=0 /\\ b=1) \\/ (a=1 /\\ b=0)").unwrap().1;
-    println!("(a=0 /\\ b=1) \\/ (a=1 /\\ b=0) --- {:?}", states(&init, &State::new()));
-  }
-
   let state = State::new();
   let ini_states = states(&init, &state);
 

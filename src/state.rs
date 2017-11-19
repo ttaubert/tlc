@@ -1,18 +1,18 @@
 // Licensed under MIT. See LICENSE for details.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use types::Ident;
 use value::Value;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct State {
-    vars: HashMap<Ident, Value>,
+    vars: BTreeMap<Ident, Value>,
 }
 
 impl State {
     pub fn new() -> Self {
-        Self { vars: HashMap::new() }
+        Self { vars: BTreeMap::new() }
     }
 
     pub fn has(&self, id: &Ident) -> bool {
