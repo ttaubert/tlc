@@ -2,7 +2,8 @@
 
 use std::collections::HashMap;
 
-use types::*;
+use types::Ident;
+use value::Value;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct State {
@@ -31,7 +32,7 @@ impl State {
     pub fn merge_with(&self, other: &Self) -> Self {
         let mut vars = self.vars.clone();
         for (id, val) in &other.vars {
-            vars.insert(id.clone(), *val);
+            vars.insert(id.clone(), val.clone());
         }
         Self { vars }
     }

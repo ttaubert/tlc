@@ -1,6 +1,5 @@
 // Licensed under MIT. See LICENSE for details.
 
-pub type Value = u64;
 pub type Ident = String;
 
 // AST node types.

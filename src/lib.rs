@@ -7,3 +7,4 @@ pub mod atom;
 pub mod parser;
 pub mod state;
 pub mod types;
+mod value;
