@@ -8,38 +8,6 @@ use rtlc::parser::parse;
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
-/*fn next_states(arena: &Arena<Atom>, node: &NodeId, state: &State) -> Vec<State> {
-  match arena[*node].data {
-    /*Atom::Conjunction => {
-      // TODO two children
-      let mut children = node.children(arena);
-      let sts = next_states(arena, &children.next().unwrap(), state);
-      let sts2 = next_states(arena, &children.next().unwrap(), state);
-      merge_states(&sts, &sts2)
-    }*/
-    /*Atom::Disjunction => {
-      // TODO two children
-      node.children(arena).flat_map(|ref c| next_states(arena, c, state)).collect()
-    }*/
-    /*Atom::Equality => {
-      // TODO two children
-      /*if id.ends_with("'") {
-        vec!(state.extend(id.clone(), *val))
-      } else if state.get(id) == Some(val) {
-        vec!(state.clone())
-      } else {
-        vec!()
-      }*/
-      vec!()
-    }*/
-    /*Atom::StatePredicate(_) => {
-      // TODO one child
-      next_states(arena, &node.children(arena).next().unwrap(), state)
-    }*/
-    _ => panic!("unsupported type in next_states()")
-  }
-}*/
-
 fn main() {
     println!("         ______ __    ______  ");
     println!("   _____/_  __// /   / ____/  ");
