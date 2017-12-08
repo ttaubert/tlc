@@ -3,7 +3,7 @@
 pub type Ident = String;
 
 // AST node types.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum AST {
     Boolean(bool),
     Conjunction(Box<AST>, Box<AST>),
